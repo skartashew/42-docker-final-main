@@ -1,0 +1,50 @@
+name: Go CI/CD
+
+on:
+  push:
+    branches: ["main"]  # Запускать при пуше в ветку main
+  pull_request:
+    branches: ["main"]  # Запускать при создании пул-реквеста в ветку main
+  release:
+    types: [published]  # Запускать при публикации релиза (тега)
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Run tests
+        run: go test -race -v ./...  # Запуск тестов с проверкой на состояние гонки
+
+  build-and-push:
+    needs: test  # Зависит от успешного завершения job "test"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')  # Запускать только при добавлении тегов
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .  # Контекст сборки (текущая директория)
+          push: true  # Включить загрузку образа в Docker Hub
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/42-docker-final-main:${{ github.ref_name }}  # Используйте имя тега как версию
